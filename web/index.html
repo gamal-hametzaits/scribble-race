@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#1b1433">
+<title>מרוץ השרבוט</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <canvas id="world"></canvas>
+  <div id="hud" class="hidden">
+    <div class="hud-top">
+      <div id="hudStage" class="chip">שלב 1/3</div>
+      <div id="hudTime" class="chip big">0.00</div>
+      <button id="hudExit" class="chip btn-x" aria-label="יציאה">✕</button>
+    </div>
+    <div id="progress"><div class="track"></div><div id="progDots"></div><div class="flag"></div></div>
+    <div id="countdown" class="hidden">3</div>
+  </div>
+  <div id="padWrap" class="hidden">
+    <canvas id="pad"></canvas>
+    <div class="padHint" id="padHint">צייר יד מהכתף ורגל מהמותן · אפשר לצייר מחדש תוך כדי מרוץ</div>
+    <div class="ink"><div id="inkBar"></div></div>
+  </div>
+
+  <section id="menu" class="screen">
+    <div class="logo">
+      <div class="logo-mark">✎</div>
+      <h1>מרוץ<br><span>השרבוט</span></h1>
+      <p class="tag">מה שתצייר — ככה תרוץ.</p>
+    </div>
+    <label class="field"><span>השם שלך</span><input id="nameIn" maxlength="12" placeholder="עוז"></label>
+    <button id="btnSolo" class="btn primary">משחק לבד · 3 שלבים</button>
+    <div class="row2">
+      <button id="btnHost" class="btn">צור חדר</button>
+      <button id="btnJoinOpen" class="btn">הצטרף לחדר</button>
+    </div>
+    <div id="joinBox" class="hidden">
+      <input id="codeIn" maxlength="4" placeholder="קוד" inputmode="latin" autocapitalize="characters">
+      <button id="btnJoin" class="btn primary">הצטרף</button>
+    </div>
+    <div id="menuMsg" class="msg"></div>
+    <div id="bests" class="bests"></div>
+  </section>
+
+  <section id="lobby" class="screen hidden">
+    <h2>חדר מרוץ</h2>
+    <div class="code-label">קוד החדר</div>
+    <div id="roomCode" class="code">----</div>
+    <p class="sub">שלח לחברים את הקוד · עד 4 שחקנים</p>
+    <ul id="players"></ul>
+    <div id="stagePick" class="stages">
+      <button data-s="0" class="st on">1 · גבעות</button><button data-s="1" class="st">2 · מדרגות</button><button data-s="2" class="st">3 · תהום</button>
+    </div>
+    <button id="btnStart" class="btn primary">התחל מרוץ</button>
+    <div id="lobbyMsg" class="msg"></div>
+    <button id="btnLeave" class="btn ghost">יציאה</button>
+  </section>
+
+  <section id="result" class="screen card hidden">
+    <h2 id="resTitle">הגעת לקו הסיום!</h2>
+    <div id="resSub" class="sub"></div>
+    <div id="resTime" class="restime"></div>
+    <ol id="ranks"></ol>
+    <button id="btnNext" class="btn primary">לשלב הבא</button>
+    <button id="btnAgain" class="btn">שוב</button>
+    <button id="btnHome" class="btn ghost">לתפריט</button>
+  </section>
+</div>
+<script src="peerjs.min.js"></script>
+<script src="physics.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
