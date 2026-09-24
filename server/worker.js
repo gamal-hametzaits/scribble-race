@@ -4,6 +4,8 @@ import { DurableObject } from 'cloudflare:workers';
 const COLORS = ['#ff5a4e', '#35c2ff', '#7be07b', '#ffcf5a'];
 const MAX = 4;
 
+const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' };
+
 export default {
   async fetch(req, env) {
     const url = new URL(req.url);
@@ -12,12 +14,82 @@ export default {
       if (req.headers.get('Upgrade') !== 'websocket') return new Response('websocket required', { status: 426 });
       return env.ROOMS.get(env.ROOMS.idFromName(m[1])).fetch(req);
     }
+    if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
+    if (url.pathname === '/scores' || url.pathname === '/score' || url.pathname === '/records' || url.pathname === '/stats') {
+      const r = await env.BOARD.get(env.BOARD.idFromName('global')).fetch(req);
+      const h = new Headers(r.headers); for (const k in CORS) h.set(k, CORS[k]);
+      return new Response(r.body, { status: r.status, headers: h });
+    }
     if (url.pathname === '/' || url.pathname === '/health') {
-      return Response.json({ ok: true, service: 'scribble-race-server', version: '1.1.0' }, { headers: { 'Access-Control-Allow-Origin': '*' } });
+      return Response.json({ ok: true, service: 'scribble-race-server', version: '1.2.0', leaderboard: true }, { headers: CORS });
     }
     return new Response('not found', { status: 404 });
   }
 };
+
+// Global leaderboard: one SQLite-backed Durable Object. Best time per player per track.
+export class Board extends DurableObject {
+  constructor(ctx, env) {
+    super(ctx, env);
+    this.sql = ctx.storage.sql;
+    this.sql.exec('CREATE TABLE IF NOT EXISTS best(stage INTEGER NOT NULL, pid TEXT NOT NULL, name TEXT NOT NULL, time REAL NOT NULL, at INTEGER NOT NULL, PRIMARY KEY(stage, pid))');
+    this.sql.exec('CREATE INDEX IF NOT EXISTS best_rank ON best(stage, time)');
+    this.sql.exec('CREATE TABLE IF NOT EXISTS recs(id INTEGER PRIMARY KEY AUTOINCREMENT, stage INTEGER, name TEXT, time REAL, at INTEGER)');
+    this.last = new Map();
+  }
+  board(stage, pid) {
+    const top = this.sql.exec('SELECT pid, name, time, at FROM best WHERE stage = ? ORDER BY time ASC, at ASC LIMIT 10', stage).toArray()
+      .map(r => ({ name: r.name, time: r.time, at: r.at, me: !!pid && r.pid === pid }));
+    const total = this.sql.exec('SELECT COUNT(*) AS n FROM best WHERE stage = ?', stage).one().n;
+    let me = null;
+    if (pid) {
+      const row = this.sql.exec('SELECT time FROM best WHERE stage = ? AND pid = ?', stage, pid).toArray()[0];
+      if (row) me = { time: row.time, rank: this.sql.exec('SELECT COUNT(*) AS n FROM best WHERE stage = ? AND time < ?', stage, row.time).one().n + 1 };
+    }
+    return { stage, top, total, me };
+  }
+  async fetch(req) {
+    const url = new URL(req.url);
+    const bad = (e, s = 400) => Response.json({ error: e }, { status: s });
+    if (url.pathname === '/records') {
+      const recs = this.sql.exec('SELECT stage, name, time, at FROM recs ORDER BY id DESC LIMIT 15').toArray();
+      return Response.json({ recs });
+    }
+    if (url.pathname === '/stats') {
+      const s = this.sql.exec('SELECT COUNT(*) AS scores, COUNT(DISTINCT pid) AS players, COUNT(DISTINCT stage) AS tracks FROM best').one();
+      return Response.json(s);
+    }
+    if (req.method === 'GET') {
+      const stage = parseInt(url.searchParams.get('stage'), 10);
+      if (!(stage >= 0 && stage < 10000)) return bad('stage');
+      const pid = /^[a-z0-9]{8,24}$/.test(url.searchParams.get('pid') || '') ? url.searchParams.get('pid') : null;
+      return Response.json(this.board(stage, pid));
+    }
+    if (req.method !== 'POST' || url.pathname !== '/score') return bad('method', 405);
+    let d; try { d = await req.json(); } catch (e) { return bad('json'); }
+    const stage = d.stage | 0, time = Math.round(Number(d.time) * 100) / 100, pid = String(d.pid || '');
+    const name = String(d.name || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 12) || 'שחקן';
+    if (!(stage >= 0 && stage < 10000)) return bad('stage');
+    if (!/^[a-z0-9]{8,24}$/.test(pid)) return bad('pid');
+    if (!(time >= 9 && time <= 900)) return bad('time');
+    const now = Date.now();
+    if (now - (this.last.get(pid) || 0) < 2000) return bad('slow down', 429);
+    this.last.set(pid, now); if (this.last.size > 5000) this.last.clear();
+    const prevTop = this.sql.exec('SELECT time FROM best WHERE stage = ? ORDER BY time ASC LIMIT 1', stage).toArray()[0];
+    const mine = this.sql.exec('SELECT time FROM best WHERE stage = ? AND pid = ?', stage, pid).toArray()[0];
+    let improved = false;
+    if (!mine || time < mine.time) {
+      this.sql.exec('INSERT INTO best(stage, pid, name, time, at) VALUES(?, ?, ?, ?, ?) ON CONFLICT(stage, pid) DO UPDATE SET name = excluded.name, time = excluded.time, at = excluded.at', stage, pid, name, time, now);
+      improved = true;
+    } else if (mine) this.sql.exec('UPDATE best SET name = ? WHERE stage = ? AND pid = ? AND name != ?', name, stage, pid, name);
+    const worldRecord = improved && (!prevTop || time < prevTop.time);
+    if (worldRecord) {
+      this.sql.exec('INSERT INTO recs(stage, name, time, at) VALUES(?, ?, ?, ?)', stage, name, time, now);
+      this.sql.exec('DELETE FROM recs WHERE id <= (SELECT MAX(id) FROM recs) - 50');
+    }
+    return Response.json({ ...this.board(stage, pid), improved, worldRecord });
+  }
+}
 
 export class Room extends DurableObject {
   constructor(ctx, env) { super(ctx, env); }
