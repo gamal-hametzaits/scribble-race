@@ -264,13 +264,14 @@ function frame(now) {
 }
 
 // ---------- networking (PeerJS WebRTC, free public broker) ----------
+const SERVER = new URLSearchParams(location.search).get('server') || 'wss://scribble-race-server.gamal-hametzaits.workers.dev';
 const Net = {
-  peer: null, conns: {}, isHost: false, code: '', players: {}, hostConn: null,
+  peer: null, ws: null, mode: 'server', hostId: null, conns: {}, isHost: false, code: '', players: {}, hostConn: null,
   prefix: 'scribble-race-oz-',
   mkCode() { const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; let s = ''; for (let i = 0; i < 4; i++) s += A[Math.floor(Math.random() * A.length)]; return s; },
   opts() { return { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }, { urls: 'stun:stun.cloudflare.com:3478' }] } }; },
-  host() {
-    this.reset(); this.isHost = true; this.code = this.mkCode(); S.myId = 'h'; S.myColor = COLORS[0];
+  hostP2P() {
+    this.reset(); this.mode = 'p2p'; this.isHost = true; this.hostId = 'h'; this.code = this.mkCode(); S.myId = 'h'; S.myColor = COLORS[0];
     lobbyMsg('מתחבר לשרת…');
     this.peer = new Peer(this.prefix + this.code, this.opts());
     this.peer.on('open', () => { this.players = { h: { id: 'h', name: S.name, color: COLORS[0] } }; showLobby(); lobbyMsg('ממתין לשחקנים…'); });
@@ -285,7 +286,7 @@ const Net = {
         this.players[id] = { id, name: '...', color: free };
       });
     });
-    this.peer.on('error', e => { if (e.type === 'unavailable-id') return this.host(); lobbyMsg('שגיאת חיבור: ' + e.type); menuMsg('שגיאת חיבור: ' + e.type); });
+    this.peer.on('error', e => { if (e.type === 'unavailable-id') return this.hostP2P(); lobbyMsg('שגיאת חיבור: ' + e.type); menuMsg('שגיאת חיבור: ' + e.type); });
     this.peer.on('disconnected', () => { try { this.peer.reconnect(); } catch (e) {} });
   },
   onHostData(conn, d) {
@@ -295,8 +296,8 @@ const Net = {
   },
   relay(d, except) { for (const id in this.conns) if (id !== except) try { this.conns[id].send(d); } catch (e) {} },
   broadcastPlayers() { this.relay({ t: 'players', players: this.players }); syncRemotes(); },
-  join(code) {
-    this.reset(); this.isHost = false; this.code = code;
+  joinP2P(code) {
+    this.reset(); this.mode = 'p2p'; this.isHost = false; this.hostId = 'h'; this.code = code;
     menuMsg('מתחבר לחדר ' + code + '…');
     this.peer = new Peer(this.opts());
     const fail = setTimeout(() => menuMsg('לא הצלחתי להתחבר. בדוק את הקוד, או נסו שניכם על אותה רשת Wi-Fi.'), 12000);
@@ -313,8 +314,42 @@ const Net = {
     });
     this.peer.on('error', e => { clearTimeout(fail); menuMsg(e.type === 'peer-unavailable' ? 'לא נמצא חדר עם הקוד הזה' : 'שגיאת חיבור: ' + e.type); });
   },
-  send(d) { if (this.isHost) this.relay(d); else if (this.hostConn && this.hostConn.open) this.hostConn.send(d); },
-  reset() { try { this.peer && this.peer.destroy(); } catch (e) {} this.peer = null; this.conns = {}; this.players = {}; this.hostConn = null; S.remotes = {}; }
+  // ---- online server (Cloudflare Worker + Durable Object) ----
+  wsConnect(code, create, onFail) {
+    this.reset(); this.mode = 'server'; this.code = code;
+    let opened = false, welcomed = false;
+    const ws = new WebSocket(SERVER + '/room/' + code + (create ? '?create=1' : ''));
+    this.ws = ws;
+    const t = setTimeout(() => { if (!welcomed) { try { ws.close(); } catch (e) {} onFail('timeout'); } }, 7000);
+    ws.onopen = () => { opened = true; ws.send(JSON.stringify({ t: 'hello', name: S.name })); };
+    ws.onmessage = ev => {
+      let d; try { d = JSON.parse(ev.data); } catch (e) { return; }
+      if (d.t === 'taken' || d.t === 'noroom' || d.t === 'full' || d.t === 'busy') { clearTimeout(t); welcomed = true; this.ws = null; onFail(d.t); return; }
+      if (d.t === 'welcome') { clearTimeout(t); welcomed = true; S.myId = d.id; S.myColor = d.color; return; }
+      if (d.t === 'players') { this.players = d.players; this.hostId = d.host; this.isHost = d.host === S.myId; syncRemotes(); if (S.mode !== 'multi' || !$('lobby').classList.contains('hidden')) showLobby(); else renderPlayers(); return; }
+      if (d.t === 'pong') return;
+      onData(d);
+    };
+    ws.onclose = () => { if (this.ws === ws && welcomed && S.mode === 'multi') { leaveToMenu(); menuMsg('החיבור לשרת נותק'); } else if (!welcomed) { clearTimeout(t); onFail('neterr'); } };
+    this.pingT = setInterval(() => { if (ws.readyState === 1) ws.send('{"t":"ping"}'); }, 25000);
+  },
+  host(tries = 0) {
+    lobbyMsg(''); menuMsg('מתחבר לשרת…');
+    this.wsConnect(this.mkCode(), true, why => {
+      if (why === 'taken' && tries < 5) return this.host(tries + 1);
+      menuMsg('השרת לא זמין, עובר לחיבור ישיר…'); this.hostP2P();
+    });
+  },
+  join(code) {
+    menuMsg('מתחבר לחדר ' + code + '…');
+    this.wsConnect(code, false, why => {
+      if (why === 'noroom') { menuMsg('בודק חדר בחיבור ישיר…'); return this.joinP2P(code); }
+      if (why === 'full' || why === 'busy') return menuMsg('החדר מלא או שהמרוץ כבר התחיל');
+      menuMsg('השרת לא זמין, מנסה חיבור ישיר…'); this.joinP2P(code);
+    });
+  },
+  send(d) { if (this.mode === 'server') { if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify(d)); return; } if (this.isHost) this.relay(d); else if (this.hostConn && this.hostConn.open) this.hostConn.send(d); },
+  reset() { try { this.peer && this.peer.destroy(); } catch (e) {} try { this.ws && this.ws.close(); } catch (e) {} this.ws = null; clearInterval(this.pingT); this.peer = null; this.conns = {}; this.players = {}; this.hostConn = null; S.remotes = {}; }
 };
 function syncRemotes() {
   for (const id in Net.players) if (id !== S.myId && !S.remotes[id]) S.remotes[id] = { x: 0, y: 0, a: 0, ma: 0, tx: 0, ty: 0, ta: 0, arm: null, leg: null };
@@ -330,13 +365,14 @@ function onData(d) {
 }
 function showLobby() {
   S.mode = 'multi'; show('lobby'); $('roomCode').textContent = Net.code; renderPlayers();
+  $('netMode').textContent = Net.mode === 'server' ? '🌐 אונליין דרך השרת · אפשר לשחק מכל מקום' : '📡 חיבור ישיר (השרת לא זמין)';
   $('btnStart').classList.toggle('hidden', !Net.isHost); $('stagePick').classList.toggle('hidden', !Net.isHost);
   if (!Net.isHost) lobbyMsg('ממתין שהמארח יתחיל…');
 }
 function renderPlayers() {
   const ul = $('players'); ul.innerHTML = '';
   if (Net.isHost && S.mode === 'multi') lobbyMsg(Object.keys(Net.players).length >= 2 ? 'כולם כאן? לחץ התחל' : 'ממתין לשחקנים…');
-  for (const p of Object.values(Net.players)) { const li = document.createElement('li'); li.innerHTML = `<span class="dot" style="background:${p.color}"></span><span></span>`; li.children[1].textContent = p.name + (p.id === S.myId ? ' (אני)' : '') + (p.id === 'h' ? ' · מארח' : ''); ul.appendChild(li); }
+  for (const p of Object.values(Net.players)) { const li = document.createElement('li'); li.innerHTML = `<span class="dot" style="background:${p.color}"></span><span></span>`; li.children[1].textContent = p.name + (p.id === S.myId ? ' (אני)' : '') + (p.id === Net.hostId ? ' · מארח' : ''); ul.appendChild(li); }
 }
 function lobbyMsg(t) { $('lobbyMsg').textContent = t; }
 function menuMsg(t) { $('menuMsg').textContent = t; }
