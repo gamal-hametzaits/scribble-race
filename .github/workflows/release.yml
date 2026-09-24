@@ -1,0 +1,44 @@
+name: Build signed APK
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Android build tools + platform
+        run: |
+          mkdir -p $HOME/sdk && cd $HOME/sdk
+          curl -sL -o bt.zip https://dl.google.com/android/repository/build-tools_r34-linux.zip && unzip -q bt.zip
+          curl -sL -o plat.zip https://dl.google.com/android/repository/platform-34-ext7_r03.zip && unzip -q plat.zip
+          echo "ANDROID_BT=$HOME/sdk/android-14" >> $GITHUB_ENV
+          echo "ANDROID_JAR=$HOME/sdk/android-34/android.jar" >> $GITHUB_ENV
+      - name: Keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > $HOME/release.jks
+          echo "KEYSTORE=$HOME/release.jks" >> $GITHUB_ENV
+      - name: Build
+        env:
+          KSP: ${{ secrets.KSP }}
+        run: bash build-apk.sh
+      - name: Attach to release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/build/scribble-race.apk scribble-race-${{ github.event.release.tag_name }}.apk
+          gh release upload "${{ github.event.release.tag_name }}" scribble-race-${{ github.event.release.tag_name }}.apk --clobber
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scribble-race-apk
+          path: android/build/scribble-race.apk
