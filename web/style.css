@@ -52,3 +52,4 @@ input:focus{border-color:#ffcf5a}
 .padHint{position:absolute;top:10px;left:0;right:0;text-align:center;color:#8b7d6b;font-size:13px;pointer-events:none}
 .ink{position:absolute;left:30px;right:30px;bottom:calc(22px + env(safe-area-inset-bottom));height:6px;border-radius:3px;background:#e9dfcf;pointer-events:none}
 #inkBar{height:100%;width:100%;border-radius:3px;background:#ff5a4e}
+.mode{font-size:13px;color:#7be07b;opacity:1}
