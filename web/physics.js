@@ -4,6 +4,7 @@ const C={UPK:150, UPD:15, IM:6000, MOTOR:5.2}; const G = 1400, MU = 0.95, HIP = 
 function rng(seed){ let s = seed>>>0 || 1; return ()=>{ s^=s<<13; s^=s>>>17; s^=s<<5; return ((s>>>0)%100000)/100000; }; }
 // terrain as polyline points [x,y], y down. Steps are near-vertical (2px wide).
 function makeTrack(stage){
+  if (stage >= 3) return makeTrackN(stage);
   const r = rng(1000+stage*77), pts = [];
   let x = -400, y = 400; pts.push([x,y]); x = 300; pts.push([x,y]);
   const len = 3600 + stage*900;
@@ -25,7 +26,44 @@ function makeTrack(stage){
     pts[pts.length-1][1] = Math.max(160, Math.min(620, pts[pts.length-1][1]));
   }
   pts.push([x+250,pts[pts.length-1][1]]); const finish = x+60; pts.push([x+1200,pts[pts.length-1][1]]);
-  return {pts, finish, start:{x:120,y:400-70}};
+  return {pts, finish, start:{x:120,y:400-70}, theme: stage, dif: stage};
+}
+// Procedural tracks 4..10000: each seed gets its own mix of obstacles; difficulty ramps up then levels off.
+function makeTrackN(stage){
+  const r = rng(7919+stage*104729), pts = [];
+  const dif = Math.min(4, 2 + Math.log2(stage-1)*0.5);
+  const wts = [0.6+r(), 0.3+r(), 0.2+r()*0.8, 0.2+r()*0.9, 0.15+r()*0.8]; // hill, steps, pit, ramp, washboard
+  const sum = wts.reduce((a,b)=>a+b,0);
+  let x = -400, y = 400; pts.push([x,y]); x = 300; pts.push([x,y]);
+  const len = 3600 + Math.min(dif,3.2)*900 + r()*900;
+  const clampY = () => { y = Math.max(160, Math.min(620, y)); pts[pts.length-1][1] = y; };
+  while (x < len){
+    let k = r()*sum, kind = 0; while (kind < 4 && k > wts[kind]) { k -= wts[kind]; kind++; }
+    if (kind === 0){ // rolling hill
+      const w = 280+r()*420, a = Math.min(40+r()*80, w*(0.13+Math.min(dif,2.5)*0.012))*(r()<0.5?-1:1);
+      for (let i=1;i<=12;i++) pts.push([x+w*i/12, y - a*Math.sin(Math.PI*i/12)]);
+      x += w;
+    } else if (kind === 1){ // steps
+      const n = 2+Math.floor(r()*3), up = r()<0.6, h = 14+r()*(10+dif*6);
+      for (let i=0;i<n;i++){ const w=90+r()*60; y += up?-h:h; y = Math.max(160, Math.min(620, y)); pts.push([x+2,y]); x += w; pts.push([x,y]); }
+    } else if (kind === 2){ // pit
+      const w = 110+r()*90, d = 28+r()*(10+dif*5);
+      pts.push([x+2,y+d]); pts.push([x+w,y+d]); pts.push([x+w+2,y]); x += w+2;
+      pts.push([x+150,y]); x += 150;
+    } else if (kind === 3){ // ramp then drop
+      const w = 240+r()*160, h = Math.min(y-170, Math.min(w*0.26, 30+r()*(15+dif*8)));
+      if (h < 20) { pts.push([x+200, y]); x += 200; continue; }
+      for (let i=1;i<=6;i++) pts.push([x+w*i/6, y - h*(i/6)*(0.5+i/12)]);
+      x += w; pts.push([x+2, y - h*0.25]); x += 2; y -= h*0.25; pts.push([x+160, y]); x += 160;
+    } else { // washboard bumps
+      const n = 5+Math.floor(r()*6), a = 5+r()*(4+dif*2), p = 40+r()*30;
+      for (let i=0;i<n;i++){ pts.push([x+p*0.5, y-a]); pts.push([x+p, y]); x += p; }
+      pts.push([x+120,y]); x += 120;
+    }
+    clampY();
+  }
+  pts.push([x+250,pts[pts.length-1][1]]); const finish = x+60; pts.push([x+1200,pts[pts.length-1][1]]);
+  return {pts, finish, start:{x:120,y:400-70}, theme: stage, dif};
 }
 function groundAt(track, px){ // returns y of surface (top) at x (highest among segments covering x)
   const p = track.pts; let lo=0, hi=p.length-1;
