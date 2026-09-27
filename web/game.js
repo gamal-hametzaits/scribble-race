@@ -12,9 +12,9 @@ const THEMES = [
   { n: 'מדבר', sky: ['#ff9f1c', '#ffe8a8'], far: '#e8872a', mid: '#c0611a', gnd: '#4a2410', top: '#ffe600', sun: '#ffffff' },
   { n: 'חלל', sky: ['#000000', '#1b1b4a'], far: '#23235e', mid: '#15153d', gnd: '#08081a', top: '#b6ff3b', sun: '#c9c9ff', stars: 1 }
 ];
-const FIRST = [['גבעות', 0], ['מדרגות', 4], ['תהום', 2]];
+const FIRST = [['טיפוס לפסגה', 0], ['קפיצה מעל מכשולים', 4], ['טיפוס וקפיצות', 2]];
 function themeIdx(s) { return s < 3 ? FIRST[s][1] : (Math.imul(s + 1, 2654435761) >>> 0) % THEMES.length; }
-function stageName(s) { return s < 3 ? FIRST[s][0] : THEMES[themeIdx(s)].n; }
+function stageName(s) { return s < 3 ? FIRST[s][0] : (['טיפוס', 'מכשולים', 'מסלול מעורב'][s % 3] + ' · ' + THEMES[themeIdx(s)].n); }
 function stageStars(s) { const t = P.makeTrack(s); return '★'.repeat(Math.min(5, Math.round(t.dif) + 1)); }
 function stageLabel(s) { return `מסלול ${s + 1} · ${stageName(s)}`; }
 const MAX_INK = 90; // world units per limb
@@ -114,7 +114,7 @@ function buzz(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch (e
 
 // ---------- screens ----------
 function show(id) { for (const s of ['menu', 'lobby', 'result', 'board']) $(s).classList.toggle('hidden', s !== id); }
-function raceUI(on) { $('hud').classList.toggle('hidden', !on); $('padWrap').classList.toggle('hidden', !on); if (on) setTimeout(resize, 0); }
+function raceUI(on) { $('hud').classList.toggle('hidden', !on); $('padWrap').classList.toggle('hidden', !on); $('btnJump').classList.toggle('hidden', !on); if (on) setTimeout(resize, 0); }
 function fmt(t) { return t.toFixed(2); }
 function esc(t) { return String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function toast(t, ms = 2600) { const el = $('toast'); el.textContent = t; el.classList.remove('hidden'); clearTimeout(toast.h); toast.h = setTimeout(() => el.classList.add('hidden'), ms); }
@@ -132,7 +132,7 @@ for (const el of document.querySelectorAll('.picker')) {
   el.querySelector('.dice').onclick = () => { setPick(Math.floor(Math.random() * (MAX_STAGE + 1))); buzz(15); };
 }
 function renderBests() {
-  const st = S.pick, b = store.get('best', {}), mine = b[st] ? ` · השיא שלך <b>${fmt(b[st])}</b>` : '';
+  const st = S.pick, b = store.get('bestV2', {}), mine = b[st] ? ` · השיא שלך <b>${fmt(b[st])}</b>` : '';
   const c = Board.cache[st];
   const wr = c && c.top && c.top.length ? `🏆 שיא עולמי: ${esc(c.top[0].name)} <b>${fmt(c.top[0].time)}</b>` : (c ? '🏆 אין עדיין שיא עולמי - תהיה הראשון!' : '🏆 טוען שיא עולמי…');
   $('wrLine').innerHTML = wr + mine;
@@ -152,7 +152,7 @@ function renderBoard() {
   Board.get(st).then(d => { if (S.pick === st) { renderLb($('boardList'), d, 10); meLine($('boardMe'), d); } }).catch(() => renderLb($('boardList'), null, 10));
   Board.records().then(d => {
     $('feed').innerHTML = d.recs.length ? '' : '<li>עוד לא נשברו שיאים</li>';
-    for (const r of d.recs) { const li = document.createElement('li'); li.innerHTML = `<b>${esc(r.name)}</b> · מסלול ${r.stage + 1} · <span class="t">${fmt(r.time)}s</span> · ${ago(r.at)}`; li.onclick = () => setPick(r.stage); $('feed').appendChild(li); }
+    for (const r of d.recs) { const li = document.createElement('li'); li.innerHTML = `<b>${esc(r.name)}</b> · מסלול ${r.stage - 9999} · <span class="t">${fmt(r.time)}s</span> · ${ago(r.at)}`; li.onclick = () => setPick(r.stage - 10000); $('feed').appendChild(li); }
   }).catch(() => { $('feed').innerHTML = '<li>📴 אין חיבור</li>'; });
 }
 function ago(t) { const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 1 ? 'עכשיו' : m < 60 ? `לפני ${m} דק׳` : m < 1440 ? `לפני ${Math.round(m / 60)} שע׳` : `לפני ${Math.round(m / 1440)} ימים`; }
@@ -164,7 +164,7 @@ function startRace(stage, countdown = 3) {
   for (const w of ['arm', 'leg']) if (padState.strokes[w]) S.me.setLimb(w, padState.strokes[w]);
   S.limbDirty = true; S.rec = []; S.recT = 0; S.finishOrder = [];
   for (const id in S.remotes) { const r = S.remotes[id]; Object.assign(r, { x: S.track.start.x, y: S.track.start.y, a: 0, ma: 0, fin: false, time: 0, tx: S.track.start.x, ty: S.track.start.y, ta: 0 }); }
-  S.ghost = S.mode === 'solo' ? store.get('ghost' + stage, null) : null;
+  S.ghost = S.mode === 'solo' ? store.get('ghostV2' + stage, null) : null;
   S.countdown = countdown; S.running = false;
   $('hudStage').textContent = stageLabel(stage);
   const showWr = d => { const w = d && d.top && d.top[0]; $('hudWr').classList.toggle('hidden', !w); if (w) $('hudWr').textContent = `🏆 ${w.name} ${fmt(w.time)}`; };
@@ -175,8 +175,8 @@ function startRace(stage, countdown = 3) {
 function finishMe() {
   const t = S.me.time; buzz([30, 40, 60]);
   if (S.mode === 'solo') {
-    const best = store.get('best', {}); const nb = !best[S.stage] || t < best[S.stage];
-    if (nb) { best[S.stage] = t; store.set('best', best); store.set('ghost' + S.stage, { rec: S.rec, arm: S.me.arm, leg: S.me.leg }); }
+    const best = store.get('bestV2', {}); const nb = !best[S.stage] || t < best[S.stage];
+    if (nb) { best[S.stage] = t; store.set('bestV2', best); store.set('ghostV2' + S.stage, { rec: S.rec, arm: S.me.arm, leg: S.me.leg }); }
     submitScore(t);
     showResult(nb ? 'שיא אישי חדש!' : 'הגעת לקו הסיום!', t, [{ name: S.name || 'אני', time: t, color: S.myColor }].concat(S.ghost ? [{ name: 'הרוח (שיא קודם)', time: S.ghost.rec.length / 10, color: '#aaa' }] : []));
   } else {
@@ -263,6 +263,14 @@ function drawWorld(dt) {
   c.lineJoin = 'round'; c.lineCap = 'round'; c.beginPath(); started = false;
   for (const p of pts) { if (p[0] < vx0 - 400 || p[0] > vx1 + 400) continue; started ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]); started = true; }
   c.strokeStyle = '#111'; c.lineWidth = 11; c.stroke(); c.strokeStyle = th.top; c.lineWidth = 5; c.stroke();
+  // Painted hazard signposts distinguish each jump from ordinary ground.
+  for (const h of S.track.hazards || []) {
+    if (h.x < vx0 || h.x > vx1) continue;
+    c.fillStyle = '#111'; c.fillRect(h.x - 23, h.y - 100, 5, 65);
+    c.fillStyle = '#ffe600'; c.strokeStyle = '#111'; c.lineWidth = 4;
+    c.beginPath(); c.moveTo(h.x - 42,h.y - 94); c.lineTo(h.x - 4,h.y - 94); c.lineTo(h.x - 12,h.y - 65); c.lineTo(h.x - 42,h.y - 65); c.closePath(); c.fill(); c.stroke();
+    c.fillStyle = '#111'; c.font = 'bold 22px sans-serif'; c.textAlign = 'center'; c.fillText('↥',h.x-24,h.y-70);
+  }
   // finish
   const fx = S.track.finish, fy = P.groundAt(S.track, fx).y;
   for (let k = 0; k < 10; k++) for (let j = 0; j < 2; j++) { c.fillStyle = (k + j) % 2 ? '#fff8ee' : '#1b1433'; c.fillRect(fx + j * 8, fy - 160 + k * 16, 8, 16); }
@@ -341,11 +349,13 @@ const SERVER = new URLSearchParams(location.search).get('server') || 'wss://scri
 const API = SERVER.replace(/^ws/, 'http');
 function jfetch(url, opt) { const ac = new AbortController(); const t = setTimeout(() => ac.abort(), 7000); return fetch(url, Object.assign({ signal: ac.signal }, opt)).then(r => { clearTimeout(t); return r; }); }
 const Board = {
+  // Old versions use 0..9999. The redesigned terrain uses a separate range.
+  key(stage) { return stage + 10000; },
   cache: {},
-  async get(stage) { const r = await jfetch(`${API}/scores?stage=${stage}&pid=${S.pid}`); if (!r.ok) throw new Error(r.status); const d = await r.json(); d._at = Date.now(); this.cache[stage] = d; return d; },
-  async records() { const r = await jfetch(API + '/records'); return r.json(); },
+  async get(stage) { const r = await jfetch(`${API}/scores?stage=${this.key(stage)}&pid=${S.pid}`); if (!r.ok) throw new Error(r.status); const d = await r.json(); d._at = Date.now(); this.cache[stage] = d; return d; },
+  async records() { const r = await jfetch(API + '/records?version=2'); return r.json(); },
   async post(stage, time) {
-    const r = await jfetch(API + '/score', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ stage, time, pid: S.pid, name: S.name || 'שחקן' }) });
+    const r = await jfetch(API + '/score', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ stage: this.key(stage), time, pid: S.pid, name: S.name || 'שחקן' }) });
     if (r.status === 429) { await new Promise(z => setTimeout(z, 2300)); return this.post(stage, time); }
     if (r.status === 400) return null;
     if (!r.ok) throw new Error(r.status);
@@ -476,6 +486,7 @@ function leaveToMenu() { Net.reset(); S.mode = 'menu'; S.running = false; S.me =
 // ---------- buttons ----------
 function needName() { const n = $('nameIn').value.trim(); if (!n) { $('nameIn').focus(); menuMsg('מה השם שלך?'); return false; } S.name = n; store.set('name', n); return true; }
 $('nameIn').value = S.name;
+$('btnJump').addEventListener('pointerdown', e => { e.preventDefault(); if (S.me && S.running) { S.me.jump(); buzz(18); } });
 $('btnSolo').onclick = () => { if (!needName()) return; S.mode = 'solo'; S.myColor = COLORS[0]; startRace(S.pick); };
 $('btnHost').onclick = () => { if (!needName()) return; Net.host(); };
 $('btnJoinOpen').onclick = () => { $('joinBox').classList.toggle('hidden'); $('codeIn').focus(); };
