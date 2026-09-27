@@ -20,9 +20,10 @@
     <div id="progress"><div class="track"></div><div id="progDots"></div><div class="flag"></div></div>
     <div id="countdown" class="hidden">3</div>
   </div>
+  <button id="btnJump" class="hidden" aria-label="קפיצה">↥<span>קפיצה</span></button>
   <div id="padWrap" class="hidden">
     <canvas id="pad"></canvas>
-    <div class="padHint" id="padHint">צייר יד מהכתף ורגל מהמותן · אפשר לצייר מחדש תוך כדי מרוץ</div>
+    <div class="padHint" id="padHint">צייר יד ורגל לטיפוס · קפוץ מעל מכשולים · אפשר לצייר מחדש</div>
     <div class="ink"><div id="inkBar"></div></div>
   </div>
 
@@ -30,20 +31,20 @@
     <div class="logo">
       <div class="logo-top"><span class="stk s1">מרוץ</span><span class="pen">✎</span></div>
       <div class="stk s2">השרבוט</div>
-      <p class="tag">מה שתצייר — ככה תרוץ.</p>
+      <p class="tag">מה שתצייר - ככה תטפס ותקפוץ.</p>
     </div>
     <label class="field"><span>השם שלך</span><input id="nameIn" maxlength="12" placeholder="עוז"></label>
     <div class="picker box" id="menuPicker">
       <button class="arr" data-d="-1" aria-label="הקודם">▶</button>
       <div class="pk-mid">
         <div class="pk-num">מסלול <b class="pkN">1</b></div>
-        <div class="pk-sub"><span class="pkName">גבעות</span> · <span class="pkDif">★</span></div>
+        <div class="pk-sub"><span class="pkName">טיפוס לפסגה</span> · <span class="pkDif">★</span></div>
       </div>
       <button class="arr" data-d="1" aria-label="הבא">◀</button>
       <button class="dice" aria-label="מסלול אקראי">🎲</button>
     </div>
     <button id="wrLine" class="wrline"></button>
-    <button id="btnSolo" class="btn primary big">יאללה לרוץ!</button>
+    <button id="btnSolo" class="btn primary big">יאללה לטפס!</button>
     <div class="row2">
       <button id="btnHost" class="btn pink">צור חדר</button>
       <button id="btnJoinOpen" class="btn cyan">הצטרף לחדר</button>
@@ -62,7 +63,7 @@
       <button class="arr" data-d="-1" aria-label="הקודם">▶</button>
       <div class="pk-mid">
         <div class="pk-num">מסלול <b class="pkN">1</b></div>
-        <div class="pk-sub"><span class="pkName">גבעות</span> · <span class="pkDif">★</span></div>
+        <div class="pk-sub"><span class="pkName">טיפוס לפסגה</span> · <span class="pkDif">★</span></div>
       </div>
       <button class="arr" data-d="1" aria-label="הבא">◀</button>
       <button class="dice" aria-label="מסלול אקראי">🎲</button>
@@ -84,7 +85,7 @@
       <button class="arr" data-d="-1" aria-label="הקודם">▶</button>
       <div class="pk-mid">
         <div class="pk-num">מסלול <b class="pkN">1</b></div>
-        <div class="pk-sub"><span class="pkName">גבעות</span> · <span class="pkDif">★</span></div>
+        <div class="pk-sub"><span class="pkName">טיפוס לפסגה</span> · <span class="pkDif">★</span></div>
       </div>
       <button class="arr" data-d="1" aria-label="הבא">◀</button>
       <button class="dice" aria-label="מסלול אקראי">🎲</button>
