@@ -21,7 +21,7 @@ export default {
       return new Response(r.body, { status: r.status, headers: h });
     }
     if (url.pathname === '/' || url.pathname === '/health') {
-      return Response.json({ ok: true, service: 'scribble-race-server', version: '1.2.0', leaderboard: true }, { headers: CORS });
+      return Response.json({ ok: true, service: 'scribble-race-server', version: '1.3.0', leaderboard: true }, { headers: CORS });
     }
     return new Response('not found', { status: 404 });
   }
