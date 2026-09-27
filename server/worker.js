@@ -52,7 +52,8 @@ export class Board extends DurableObject {
     const url = new URL(req.url);
     const bad = (e, s = 400) => Response.json({ error: e }, { status: s });
     if (url.pathname === '/records') {
-      const recs = this.sql.exec('SELECT stage, name, time, at FROM recs ORDER BY id DESC LIMIT 15').toArray();
+      const offset = url.searchParams.get('version') === '2' ? 10000 : 0;
+      const recs = this.sql.exec('SELECT stage, name, time, at FROM recs WHERE stage >= ? AND stage < ? ORDER BY id DESC LIMIT 15', offset, offset + 10000).toArray();
       return Response.json({ recs });
     }
     if (url.pathname === '/stats') {
@@ -61,7 +62,7 @@ export class Board extends DurableObject {
     }
     if (req.method === 'GET') {
       const stage = parseInt(url.searchParams.get('stage'), 10);
-      if (!(stage >= 0 && stage < 10000)) return bad('stage');
+      if (!(stage >= 0 && stage < 20000)) return bad('stage');
       const pid = /^[a-z0-9]{8,24}$/.test(url.searchParams.get('pid') || '') ? url.searchParams.get('pid') : null;
       return Response.json(this.board(stage, pid));
     }
@@ -69,7 +70,7 @@ export class Board extends DurableObject {
     let d; try { d = await req.json(); } catch (e) { return bad('json'); }
     const stage = d.stage | 0, time = Math.round(Number(d.time) * 100) / 100, pid = String(d.pid || '');
     const name = String(d.name || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 12) || 'שחקן';
-    if (!(stage >= 0 && stage < 10000)) return bad('stage');
+    if (!(stage >= 0 && stage < 20000)) return bad('stage');
     if (!/^[a-z0-9]{8,24}$/.test(pid)) return bad('pid');
     if (!(time >= 9 && time <= 900)) return bad('time');
     const now = Date.now();
